@@ -242,6 +242,16 @@ textarea{width:100%;min-height:96px;font:16px var(--sans);padding:10px;border-ra
 .btn.hear .mini{width:22px;height:22px;border-radius:50%;background:var(--coral);display:grid;place-items:center}
 .btn.hear .mini svg{width:11px;height:11px;fill:#fff;margin-left:1px}
 @media (prefers-reduced-motion:reduce){.player.playing .play,.player.playing .wave i{animation:none}}
+
+#scene .foam{fill:none;stroke:rgba(255,255,255,.75);stroke-width:2.2;stroke-linecap:round;stroke-dasharray:14 46;filter:url(#soft);animation:flow 5s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-240}}
+#scene .crest{fill:none;stroke:rgba(255,255,255,.85);stroke-width:2.6;stroke-linecap:round;filter:url(#soft);animation:crest 4.4s ease-in infinite}
+@keyframes crest{0%{transform:translateX(30px);opacity:0}30%{opacity:.9}100%{transform:translateX(-40px);opacity:0}}
+#scene .spark{fill:#fff;animation:spark 2.8s ease-in-out infinite}
+@keyframes spark{0%,100%{opacity:0;transform:scale(.4)}50%{opacity:.95;transform:scale(1)}}
+#scene .spark{transform-box:fill-box;transform-origin:center}
+#scene.night .foam,#scene.night .crest{stroke:rgba(190,215,255,.55)}
+#scene.night .spark{fill:#ffe9a8}
 </style>
 
 <div class="wrap">
@@ -464,18 +474,33 @@ function strand(x1,y1,x2,y2,d,n){const pts=sag(x1,y1,x2,y2,d,n);
  let o=`<path d="M${pts.map(p=>p.join(",")).join(" L")}" style="stroke:rgba(20,20,20,.55);stroke-width:1.5;fill:none"/>`;
  pts.forEach((p,i)=>{const c=BULB[(i+Math.round(x1))%BULB.length];const dl=((i*0.37+x1*0.013)%2).toFixed(2);
   o+=`<circle class="halo tw" cx="${p[0]}" cy="${p[1]+3}" r="9" fill="${c}" style="animation-delay:-${dl}s"/><circle class="bulb tw" cx="${p[0]}" cy="${p[1]+3}" r="3.4" fill="${c}" style="animation-delay:-${dl}s"/>`});return o}
+const RIVER_PTS=[[905,410],[925,470],[955,530],[995,660],[960,720],[915,790],[860,850],[790,910],[930,450],[1010,690],[880,820],[820,890]];
+const RIVER_LINES=["M905,405 C915,450 935,500 960,550","M925,400 C935,450 960,500 990,555","M1000,645 C990,700 950,740 905,800 S820,880 760,941","M1030,650 C1010,710 980,760 940,820 S870,900 840,941","M975,660 C960,720 920,770 880,830 S790,900 720,941","M890,400 C900,450 915,500 940,555","M1015,670 C995,730 965,790 925,850 S880,915 890,941"];
 function scene(){
  let fx=`<defs><filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
+  <clipPath id="riverclip"><polygon points="862,400 950,400 962,490 1000,560 905,560 880,500"/><polygon points="940,640 1048,640 1050,680 985,770 920,860 930,941 660,941 760,860 830,770 880,690"/></clipPath>
+  <clipPath id="seaclip"><polygon points="1672,240 1590,250 1610,300 1612,400 1640,460 1618,520 1600,600 1600,700 1620,800 1672,805"/></clipPath>
+  <filter id="rippleR" filterUnits="userSpaceOnUse" x="640" y="390" width="430" height="560"><feTurbulence type="fractalNoise" baseFrequency="0.018 0.07" numOctaves="2" seed="4" result="n"><animate attributeName="baseFrequency" dur="6s" values="0.018 0.07;0.022 0.085;0.018 0.07" repeatCount="indefinite"/><animate attributeName="seed" dur="3s" values="4;5;6;7;4" repeatCount="indefinite"/></feTurbulence><feDisplacementMap in="SourceGraphic" in2="n" scale="10" xChannelSelector="R" yChannelSelector="G"/></filter>
+  <filter id="rippleS" filterUnits="userSpaceOnUse" x="1580" y="230" width="92" height="590"><feTurbulence type="fractalNoise" baseFrequency="0.035 0.012" numOctaves="2" seed="2" result="n"><animate attributeName="baseFrequency" dur="8s" values="0.035 0.012;0.045 0.016;0.035 0.012" repeatCount="indefinite"/></feTurbulence><feDisplacementMap in="SourceGraphic" in2="n" scale="8" xChannelSelector="R" yChannelSelector="G"/></filter>
+  <filter id="soft"><feGaussianBlur stdDeviation="1.2"/></filter>
   <radialGradient id="lamp"><stop offset="0" stop-color="#fff3c4" stop-opacity=".95"/><stop offset=".35" stop-color="#ffcf6b" stop-opacity=".45"/><stop offset="1" stop-color="#ffcf6b" stop-opacity="0"/></radialGradient>
   <radialGradient id="sunglow"><stop offset="0" stop-color="#fff2b0" stop-opacity=".9"/><stop offset="1" stop-color="#ffb347" stop-opacity="0"/></radialGradient></defs>
  <image href="${IMG}" x="0" y="0" width="1672" height="941" preserveAspectRatio="xMidYMid slice"/>
+ <g class="ripples" pointer-events="none">
+  <g clip-path="url(#riverclip)"><image href="${IMG}" x="0" y="0" width="1672" height="941" filter="url(#rippleR)"/></g>
+  <g clip-path="url(#seaclip)"><image href="${IMG}" x="0" y="0" width="1672" height="941" filter="url(#rippleS)"/></g>
+ </g>
  <g class="fx" pointer-events="none">
   <circle class="sun" cx="1605" cy="170" r="120" fill="url(#sunglow)"/>
   <rect class="nightveil" width="1672" height="941"/>
   <g class="stars">${Array.from({length:60},(_,i)=>{const x=(i*277)%1672,y=(i*131)%150+8;return `<circle class="tw" cx="${x}" cy="${y}" r="${1+(i%3)*.6}" fill="#fff" style="animation-delay:-${(i%7)*.4}s"/>`}).join("")}</g>
   <g class="birds">${[0,1,2].map(i=>`<path class="bird" style="animation-delay:-${i*7}s" d="M0,${60+i*28} q7,-7 14,0 q7,-7 14,0" stroke="#2a2a2a" stroke-width="2.5" fill="none"/>`).join("")}</g>
-  <g class="water">${Array.from({length:18},(_,i)=>{const x=1560+(i*37)%110,y=290+(i*53)%420;return `<line class="shim" x1="${x}" y1="${y}" x2="${x+22}" y2="${y}" style="animation-delay:-${(i%6)*.5}s"/>`}).join("")}
-   ${Array.from({length:12},(_,i)=>{const x=840+(i*29)%110,y=620+(i*47)%300;return `<line class="shim" x1="${x}" y1="${y}" x2="${x+14}" y2="${y+4}" style="animation-delay:-${(i%5)*.6}s"/>`}).join("")}</g>
+  <g class="water">
+   ${Array.from({length:7},(_,i)=>`<path class="foam" style="animation-delay:-${i*0.9}s;animation-duration:${5+i%3}s" d="${RIVER_LINES[i%RIVER_LINES.length]}"/>`).join("")}
+   ${Array.from({length:6},(_,i)=>`<path class="crest" style="animation-delay:-${i*1.1}s" d="M${1672-0},${300+i*85} q-26,8 -52,${4+i%2*6}"/>`).join("")}
+   <g class="sparkles">${Array.from({length:16},(_,i)=>{const x=1600+(i*29)%70,y=250+(i*61)%520;return `<circle class="spark" cx="${x}" cy="${y}" r="2.2" style="animation-delay:-${(i%8)*.35}s"/>`}).join("")}
+   ${Array.from({length:14},(_,i)=>{const p=RIVER_PTS[i%RIVER_PTS.length];return `<circle class="spark" cx="${p[0]+((i*13)%30-15)}" cy="${p[1]}" r="1.8" style="animation-delay:-${(i%7)*.4}s"/>`}).join("")}</g>
+  </g>
   <g class="windows">${[[140,436,46,40],[340,436,46,40],[1288,540,40,40],[1170,775,30,32],[135,745,28,32],[290,745,28,32],[487,282,14,26],[548,282,14,26],[752,340,16,14]].map(([x,y,w,h])=>`<rect class="win" x="${x}" y="${y}" width="${w}" height="${h}" rx="3"/>`).join("")}</g>
   <g class="lamps">${[[520,398],[1282,388],[372,300],[1232,720]].map(([x,y])=>`<circle class="lampglow" cx="${x}" cy="${y}" r="46" fill="url(#lamp)"/>`).join("")}</g>
   ${strand(1238,497,1546,497,16,16)}${strand(378,737,758,737,12,18)}${strand(1272,322,1640,330,48,20)}${strand(1478,735,1658,735,10,9)}${strand(918,812,1300,842,20,18)}${strand(796,604,1168,604,-22,20)}${strand(0,300,180,250,14,8)}
@@ -491,6 +516,7 @@ function scene(){
   fx+=`<g class="station" data-id="${st.id}" tabindex="0" role="button" aria-label="${st.place}: ${st.concept}"><rect class="hot" style="animation-delay:${i*0.55}s" x="${x1}" y="${y1}" width="${x2-x1}" height="${y2-y1}" rx="14"/>
   <g class="tick"><circle cx="${x2-14}" cy="${y1+14}" r="15" style="fill:var(--mango);stroke:#fff;stroke-width:3"/><path d="M${x2-22},${y1+14} l6,6 l10,-12" style="stroke:#fff;stroke-width:4;fill:none"/></g></g>`});
  document.getElementById("scene").innerHTML=fx;
+ try{if(matchMedia("(prefers-reduced-motion: reduce)").matches)document.querySelectorAll("#scene animate").forEach(a=>a.remove())}catch(e){}
 }
 
 /* ---------- state ---------- */
