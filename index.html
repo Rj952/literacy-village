@@ -219,6 +219,29 @@ textarea{width:100%;min-height:96px;font:16px var(--sans);padding:10px;border-ra
 .ibody p{margin:0;max-width:64ch}
 .ibody .row{display:flex;flex-wrap:wrap;gap:8px}
 @media (max-width:560px){.item summary{grid-template-columns:34px minmax(0,1fr) 28px}.item summary .pill{display:none}.ibody{padding-left:6px}}
+
+/* audio player */
+.player{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:14px;padding:12px 16px 12px 12px;border-radius:999px;background:linear-gradient(115deg,var(--hdr1),var(--hdr2) 60%,var(--hdr3));color:#fff;box-shadow:0 12px 26px -14px rgba(4,59,79,.7)}
+.play{width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;display:grid;place-items:center;background:var(--coral);color:#fff;box-shadow:0 0 0 0 rgba(255,107,87,.6);transition:transform .15s ease}
+.play svg{width:24px;height:24px;fill:currentColor}
+.play:hover{transform:scale(1.06)}
+.player.playing .play{animation:ping 1.8s ease-out infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(255,107,87,.55)}100%{box-shadow:0 0 0 14px rgba(255,107,87,0)}}
+.pinfo{display:grid;gap:7px;min-width:0}
+.plabel{font:700 15px var(--sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track{height:6px;border-radius:999px;background:rgba(255,255,255,.25);cursor:pointer;overflow:hidden}
+.fill{height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#ffd166,var(--coral));transition:width .25s linear}
+.pmeta{display:grid;justify-items:end;gap:4px}
+.ptime{font:600 12px var(--sans);font-variant-numeric:tabular-nums;opacity:.85;white-space:nowrap}
+.wave{display:flex;gap:3px;align-items:flex-end;height:18px}
+.wave i{width:3px;height:5px;border-radius:2px;background:#ffd166;opacity:.5}
+.player.playing .wave i{opacity:1;animation:eq .9s ease-in-out infinite}
+.player.playing .wave i:nth-child(2){animation-delay:-.2s}.player.playing .wave i:nth-child(3){animation-delay:-.45s}.player.playing .wave i:nth-child(4){animation-delay:-.1s}.player.playing .wave i:nth-child(5){animation-delay:-.6s}
+@keyframes eq{0%,100%{height:4px}50%{height:18px}}
+.btn.hear{display:inline-flex;align-items:center;gap:8px;border-radius:999px;border-color:color-mix(in srgb,var(--coral) 50%,var(--line))}
+.btn.hear .mini{width:22px;height:22px;border-radius:50%;background:var(--coral);display:grid;place-items:center}
+.btn.hear .mini svg{width:11px;height:11px;fill:#fff;margin-left:1px}
+@media (prefers-reduced-motion:reduce){.player.playing .play,.player.playing .wave i{animation:none}}
 </style>
 
 <div class="wrap">
@@ -476,7 +499,7 @@ let state={stamps:[],notes:{},answers:{}};
 try{state=Object.assign(state,JSON.parse(localStorage.getItem(K)||"{}"))}catch(e){}
 const stamps=()=>new Set(state.stamps);
 const save=()=>{try{localStorage.setItem(K,JSON.stringify(state))}catch(e){}};
-let filter="all",current=null,lastFocus=null,teacher=false,touring=false;
+let autoplay=false,filter="all",current=null,lastFocus=null,teacher=false,touring=false;
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 function renderLists(){
@@ -484,7 +507,7 @@ function renderLists(){
  const openIds=new Set([...g.querySelectorAll("details[open]")].map(d=>d.dataset.id));
  g.innerHTML=ORDER.map((id,i)=>{const s=byId[id],got=st.has(id);return `<details class="item" data-id="${id}" style="--c:${TAGS[s.tag].c}" ${openIds.has(id)?"open":""} ${filter!=="all"&&s.tag!==filter?"hidden":""}>
   <summary><span class="num">${String(i+1).padStart(2,"0")}</span><span class="ttl"><span class="nm">${s.place}</span><span class="cn">${s.concept}</span></span><span class="pill ${got?"got":""}">${got?"✓ Stamped":TAGS[s.tag].name.split(" · ")[0]}</span><span class="chev" aria-hidden="true"></span></summary>
-  <div class="ibody"><p>${s.idea}</p><p><strong>Try this:</strong> ${s.tryit}</p><div class="row"><button class="btn primary open" data-id="${id}">Visit this place</button></div></div></details>`}).join("");
+  <div class="ibody"><p>${s.idea}</p><p><strong>Try this:</strong> ${s.tryit}</p><div class="row"><button class="btn primary open" data-id="${id}">Visit this place</button><button class="btn hear" data-id="${id}"><span class="mini">${ICON_PLAY}</span>Listen</button></div></div></details>`}).join("");
  document.getElementById("stamps").innerHTML=ORDER.map(id=>{const s=byId[id],on=st.has(id);return `<button class="stamp ${on?"on":""}" style="${on?`background:${TAGS[s.tag].c};border-color:${TAGS[s.tag].c}`:""}" data-id="${id}" aria-label="${s.place}${on?" (stamp earned)":""}">${on?"✓ ":""}${(s.short||s.place).replace(/^The /,"")}</button>`}).join("");
  document.getElementById("prog").textContent=`${st.size} of ${S.length}`;
  document.getElementById("ringn").textContent=st.size;document.getElementById("ring").style.setProperty("--p",Math.round(st.size/S.length*100));
@@ -492,19 +515,31 @@ function renderLists(){
 }
 
 /* ---------- audio: MP3 if present (audio/<id>.mp3), else the browser's voice ---------- */
-let player=null,speaking=false;
+let player=null,speaking=false,playingId=null;
+const ICON_PLAY='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>';
+const ICON_PAUSE='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4.5" height="14" rx="1.4"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.4"/></svg>';
 function narration(s){return `${s.place}. ${s.concept}. ${s.idea} In the Caribbean: ${s.carib} Try this in class: ${s.tryit} Think about it: ${s.think}`}
-function stopAudio(){if(player){player.pause();player=null}try{speechSynthesis.cancel()}catch(e){}speaking=false;const b=document.getElementById("listen");if(b){b.setAttribute("aria-pressed","false");b.innerHTML="🔊 Listen"}}
-function speak(s){
- const b=document.getElementById("listen");
- const done=()=>{speaking=false;if(b){b.setAttribute("aria-pressed","false");b.innerHTML="🔊 Listen"}};
- speaking=true;b.setAttribute("aria-pressed","true");b.innerHTML="■ Stop";
- const a=new Audio(`audio/${s.id}.mp3`);player=a;a.onended=done;
- a.play().catch(()=>{player=null;
+const fmt=t=>isFinite(t)?`${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,"0")}`:"0:00";
+function ui(state){const p=document.getElementById("player"),b=document.getElementById("listen");if(!p)return;
+ p.classList.toggle("playing",state==="playing");b.innerHTML=state==="playing"?ICON_PAUSE:ICON_PLAY;
+ b.setAttribute("aria-label",state==="playing"?"Pause narration":"Play narration");b.setAttribute("aria-pressed",state==="playing")}
+function tick(){const a=player;if(!a)return;const f=document.getElementById("pfill"),t=document.getElementById("ptime");
+ if(f&&a.duration)f.style.width=(a.currentTime/a.duration*100)+"%";if(t)t.textContent=`${fmt(a.currentTime)} / ${fmt(a.duration)}`}
+function stopAudio(){if(player){player.pause();player=null}try{speechSynthesis.cancel()}catch(e){}speaking=false;playingId=null;ui("idle")}
+function toggleAudio(s){
+ if(player&&playingId===s.id){if(player.paused){player.play();speaking=true;ui("playing")}else{player.pause();speaking=false;ui("idle")}return}
+ if(speaking){stopAudio();return}
+ const done=()=>{speaking=false;ui("idle");const f=document.getElementById("pfill");if(f)f.style.width="100%"};
+ speaking=true;playingId=s.id;ui("playing");
+ const a=new Audio(`audio/${s.id}.mp3`);player=a;a.onended=done;a.ontimeupdate=tick;a.onloadedmetadata=tick;
+ a.play().catch(()=>{player=null;const t=document.getElementById("ptime");if(t)t.textContent="Device voice";
   try{const u=new SpeechSynthesisUtterance(narration(s));const vs=speechSynthesis.getVoices();
    u.voice=vs.find(v=>/en[-_]JM/i.test(v.lang))||vs.find(v=>/en[-_]GB/i.test(v.lang))||vs.find(v=>/^en/i.test(v.lang))||null;u.rate=.95;u.onend=done;speechSynthesis.cancel();speechSynthesis.speak(u)}
-  catch(e){done();b.innerHTML="Audio not available on this device"}});
+  catch(e){done();if(t)t.textContent="Audio not available on this device"}});
 }
+function playerHTML(s){return `<div class="player" id="player"><button class="play" id="listen" aria-pressed="false" aria-label="Play narration">${ICON_PLAY}</button>
+ <div class="pinfo"><span class="plabel">Listen to ${s.short||s.place.replace(/^The /,"the ")}</span><div class="track" id="ptrack" role="slider" aria-label="Narration progress" tabindex="-1"><div class="fill" id="pfill"></div></div></div>
+ <div class="pmeta"><span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span class="ptime" id="ptime">${s.id?"":""}</span></div></div>`}
 
 function quizHTML(s){
  const ans=state.answers[s.id]||{};
@@ -518,7 +553,7 @@ function open(id){
  const links=s.links.length?`<section class="links"><h3>Go deeper</h3><ul>${s.links.map(l=>`<li><a href="${l.url}" target="_blank" rel="noopener">${l.label}</a></li>`).join("")}</ul></section>`:"";
  const tbox=teacher?`<section class="teacherbox"><h3>Teacher view: mini lesson</h3><p><strong>Aim:</strong> ${s.plan.aim}</p><ol>${s.plan.steps.map(x=>`<li>${x}</li>`).join("")}</ol><p><strong>Check for understanding:</strong> ${s.plan.check}</p></section>`:"";
  p.innerHTML=`<div class="ph">${touring?`<span class="tourbar">Guided tour · stop ${pos} of ${ORDER.length}</span>`:""}<span class="tag">${t.name}</span><h2 id="ptitle">${s.place}</h2><p class="concept">${s.concept}</p><button class="close" id="close" aria-label="Close">×</button></div>
- <div class="pb"><button class="listen" id="listen" aria-pressed="false">🔊 Listen</button>
+ <div class="pb">${playerHTML(s)}
  <section><h3>The big idea</h3><p>${s.idea}</p></section>
  <section><h3>In the Caribbean</h3><p>${s.carib}</p></section>
  <section class="try"><h3>Try this in class</h3><p>${s.tryit}</p></section>
@@ -531,7 +566,9 @@ function open(id){
  p.hidden=false;document.getElementById("scrim").hidden=false;
  p.querySelector(".pb").scrollTop=0;document.getElementById("close").focus();
  document.getElementById("close").onclick=close;
- document.getElementById("listen").onclick=()=>speaking?stopAudio():speak(s);
+ document.getElementById("listen").onclick=()=>toggleAudio(s);
+ document.getElementById("ptrack").onclick=e=>{if(!player||!player.duration)return;const r=e.currentTarget.getBoundingClientRect();player.currentTime=(e.clientX-r.left)/r.width*player.duration;tick()};
+ if(autoplay){autoplay=false;toggleAudio(s)}
  const i=ORDER.indexOf(id);
  document.getElementById("prev").onclick=()=>open(ORDER[(i-1+ORDER.length)%ORDER.length]);
  document.getElementById("next").onclick=()=>{if(touring&&i===ORDER.length-1){touring=false;close();return}open(ORDER[(i+1)%ORDER.length])};
@@ -549,7 +586,7 @@ scene();renderLists();
 try{speechSynthesis.getVoices()}catch(e){}
 document.getElementById("scene").addEventListener("click",e=>{const g=e.target.closest(".station");if(g){lastFocus=g;open(g.dataset.id)}});
 document.getElementById("scene").addEventListener("keydown",e=>{const g=e.target.closest(".station");if(g&&(e.key==="Enter"||e.key===" ")){e.preventDefault();lastFocus=g;open(g.dataset.id)}});
-document.getElementById("grid").addEventListener("click",e=>{const b=e.target.closest(".open");if(b){lastFocus=b;open(b.dataset.id)}});
+document.getElementById("grid").addEventListener("click",e=>{const h=e.target.closest(".hear");if(h){lastFocus=h;autoplay=true;open(h.dataset.id);return}const b=e.target.closest(".open");if(b){lastFocus=b;open(b.dataset.id)}});
 document.getElementById("stamps").addEventListener("click",e=>{const b=e.target.closest(".stamp");if(b){lastFocus=b;open(b.dataset.id)}});
 document.getElementById("scrim").onclick=close;
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&current)close()});
